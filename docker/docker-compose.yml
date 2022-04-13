@@ -1,0 +1,98 @@
+version: "3.7"
+services:  
+    # postgres used by airflow
+    postgres:
+        image: postgres:9.6
+        networks:
+            - default_net
+        volumes: 
+            # Create Test database on Postgresql
+            #- ./docker-airflow/pg-init-scripts/init-user-db.sh:/docker-entrypoint-initdb.d/init-user-db.sh
+            - postgres-db-volume:/var/lib/postgresql/data
+        environment:
+            - POSTGRES_USER=airflow
+            - POSTGRES_PASSWORD=airflow
+            - POSTGRES_DB=airflow
+        ports:
+            - "5432:5432"
+
+    # airflow LocalExecutor
+    airflow-webserver:
+        image: docker-airflow-spark:1.1
+        restart: always
+        networks:
+            - default_net
+        depends_on:
+            - postgres
+        environment:
+            - LOAD_EX=n
+            - EXECUTOR=Local
+        volumes:
+            - ../dags:/opt/airflow/dags #DAG folder
+            - ../spark/app:/opt/spark/app #Spark Scripts (Must be the same path in airflow and Spark Cluster)
+            - ../spark/resources:/opt/spark/resources #Resources folder (Must be the same path in airflow and Spark Cluster)
+        ports:
+            - "8080:8080"
+        command: webserver
+        healthcheck:
+            test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+            interval: 30s
+            timeout: 30s
+            retries: 3
+
+    # Spark with 3 workers
+    spark:
+        image: docker-spark:1.1
+        user: root # Run container as root container: https://docs.bitnami.com/tutorials/work-with-non-root-containers/
+        hostname: spark
+        networks:
+            - default_net
+        environment:
+            - SPARK_MODE=master
+            - SPARK_RPC_AUTHENTICATION_ENABLED=no
+            - SPARK_RPC_ENCRYPTION_ENABLED=no
+            - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+            - SPARK_SSL_ENABLED=no
+        volumes:
+            - .../spark/app:/opt/spark/app  # Spark scripts folder (Must be the same path in airflow and Spark Cluster)
+            - ../spark/resources:/opt/spark/resources #Resources folder (Must be the same path in airflow and Spark Cluster)
+        ports:
+            - "8181:8080"
+            - "7077:7077"
+
+    spark-worker-1:
+        image: docker-spark:1.1
+        user: root
+        networks:
+            - default_net
+        environment:
+            - SPARK_MODE=worker
+            - SPARK_MASTER_URL=spark://spark:7077
+            - SPARK_WORKER_MEMORY=2G
+            - SPARK_WORKER_CORES=1
+            - SPARK_RPC_AUTHENTICATION_ENABLED=no
+            - SPARK_RPC_ENCRYPTION_ENABLED=no
+            - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+            - SPARK_SSL_ENABLED=no
+        volumes:
+            - .../spark/app:/opt/spark/app  # Spark scripts folder (Must be the same path in airflow and Spark Cluster)
+            - ../spark/resources:/opt/spark/resources #Resources folder (Must be the same path in airflow and Spark Cluster)
+
+
+    #Jupyter notebook
+    jupyter-spark:
+        image: jupyter/pyspark-notebook:spark-3.1.2
+        networks:
+            - default_net
+        ports:
+          - "8888:8888"
+          - "4040-4080:4040-4080"
+        volumes:
+          - ../notebooks:/home/jovyan/work/notebooks/
+          - ../spark/resources/data:/home/jovyan/work/data/
+          - ../spark/resources/models:/home/jovyan/work/models/
+          - ../spark/resources/jars:/home/jovyan/work/jars/
+volumes:
+  postgres-db-volume:
+networks:
+    default_net:
