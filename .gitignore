@@ -4,3 +4,5 @@ dags/__pycache__
 part-*
 *_SUCCESS*
 *.pyc
+.vscode
+**/.vscode
