@@ -25,10 +25,9 @@ default_args = {
 
 with DAG(
         dag_id="test_dag",
-        #schedule_interval="@once",
+        schedule_interval="@once",
         #catchup=False,
         default_args=default_args, 
-        schedule_interval=timedelta(1)
 ) as dag:
 
     start = DummyOperator(task_id="start")
@@ -40,10 +39,21 @@ with DAG(
             "name": f"GBC",
         }
     )
+
     
     end = DummyOperator(task_id="end")
 
     start >> python_example  >> end
+
+
+
+
+
+
+
+
+
+
 
     #python_example1 = PythonOperator(
     #    task_id=f"python_example1",
